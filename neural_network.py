@@ -6,61 +6,53 @@ linear  = lambda x: x
 sigmoid = lambda x: 1 / (1 + np.exp(-x))
 
 # Exceptions 
-class IllformedArchitectureError(BaseException):
+class IllformedArchitectureError(Exception):
     pass
 
-class DifferentActivationError(BaseException):
+class DifferentActivationError(Exception):
     pass
 
-class NotRecognizedActivationError(BaseException):
+class NotRecognizedCostError(Exception):
     pass
 
-class InputLayerActivationError(BaseException):
+class NotRecognizedActivationError(Exception):
+    pass
+
+class InputLayerActivationError(Exception):
     pass
 
 # Layer abstraction
 class Layer:
     def __init__(self, no_neurons, activation):
-        if activation != 'relu' and activation != 'linear' and activation != 'sigmoid':
-            raise NotRecognizedActivationError
+        self.activation = {
+            'relu': relu,
+            'linear': linear,
+            'sigmoid': sigmoid
+        }.get(activation, None) 
 
-        self.size = no_neurons
+        if not self.activation:
+            raise NotRecognizedActivationError(f'Unknown activation function {activation}')
+
         self.value = []
-        self.activation = activation
+        self.size = no_neurons
+
+    def activate(self):
+        self.value = self.activation(self.value)
 
 # Neural network abstraction
 class NeuralNetwork:
     def __init__(self, layers):
-        # Check that there are at least to layers
+        # Check that there are at least two layers
         if len(layers) < 2:
             raise IllformedArchitectureError
 
         # Check that the first layer (input layer) has a linear activation
-        if layers[0].activation != 'linear':
-            raise InputLayerActivationError
-
-        # For now store the default activation for all layers as the activation found in
-        # layers[1]
-        layer_activation = layers[1].activation
-
-        # Check that layers[i], i = 2,...,len(layers) have the same activation function
-        for i in range(2, len(layers)):
-            if layers[i].activation != layer_activation:
-                raise DifferentActivationError
+        if layers[0].activation != linear:
+            raise InputLayerActivationError(f'First layer needs to have linear activation')
 
         # Initialize member variables
         self.layers = layers
         self.weigths = []
-        self.activation = layer_activation
-
-        # Define an activationfn used in forward propagation
-        if layer_activation == 'relu':
-            raise NotImplementedError
-            self.activationfn = relu
-        elif layer_activation == 'linear':
-            self.activationfn = linear
-        else:
-            self.activationfn = sigmoid
 
 
     # Randomly initialize weigths from the specified range_gen
@@ -92,7 +84,9 @@ class NeuralNetwork:
     def forward(self, X):
         self.layers[0].value = X
         for i in range(1, len(self.layers)):
-            self.layers[i].value = self.activationfn(self.layers[i - 1].value @ self.weigths[i - 1])
+            self.layers[i].value = self.layers[i - 1].value @ self.weigths[i - 1]
+            self.layers[i].activate()
+
         return self.layers[-1].value
 
     # Just the same as self.forward

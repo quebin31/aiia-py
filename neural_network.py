@@ -79,8 +79,12 @@ class NeuralNetwork:
     # Forward could be applied to feature matrix or a single example
     # Case X is feature matrix:
     #   It'll calculate forward propagation for every example and will set
-    #   self.layers[i].value to be a matrix containing h^(i) in each row for each 
-    #   example X[i]
+    #   self.layers[i].value to be a matrix containing h^(j) in each row for each 
+    #   example X[j], e.g.
+    #   
+    #       self.layers[i].value = [h^(i)_0, ..., h^(i)_j]
+    #           where h^(i) in R^{self.layers[i].size}
+    #           where j is the number of examples
     #
     # Case X is a single example:
     #   It'll calculate forward propagation for this example and will set
@@ -91,7 +95,7 @@ class NeuralNetwork:
             self.layers[i].value = self.activationfn(self.layers[i - 1].value @ self.weigths[i - 1])
         return self.layers[-1].value
 
-    # Just the same as self.forward, it's just an interface 
+    # Just the same as self.forward
     def predict(self, X):
         return self.forward(X)
 

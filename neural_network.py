@@ -6,22 +6,26 @@ linear  = lambda x: x
 sigmoid = lambda x: 1 / (1 + np.exp(-x))
 
 # Exceptions 
-class IllformedArchitecture(BaseException):
+class IllformedArchitectureError(BaseException):
     pass
 
-class DifferentActivation(BaseException):
+class DifferentActivationError(BaseException):
     pass
 
-class NotRecognizedActivation(BaseException):
+class NotRecognizedActivationError(BaseException):
+    pass
+
+class InputLayerActivationError(BaseException):
     pass
 
 # Layer abstraction
 class Layer:
     def __init__(self, no_neurons, activation):
-        if activation != 'relu' or activation != 'linear' or activation != 'sigmoid':
-            raise NotRecognizedActivation
+        if activation != 'relu' and activation != 'linear' and activation != 'sigmoid':
+            raise NotRecognizedActivationError
 
         self.size = no_neurons
+        self.value = []
         self.activation = activation
 
 
@@ -29,30 +33,34 @@ class Layer:
 class NeuralNetwork:
     def __init__(self, layers):
         if len(layers) == 0:
-            raise IllformedArchitecture
+            raise IllformedArchitectureError
 
         if len(layers) < 2:
-            raise IllformedArchitecture
+            raise IllformedArchitectureError
 
-        layer_activation = layers[0].activation
+        if layers[0].activation != 'linear':
+            raise InputLayerActivationError
 
-        for layer in layers:
-            if layer.activation != layer_activation:
-                raise DifferentActivation
+        layer_activation = layers[1].activation
+
+        for i in range(1, len(layers)):
+            if layers[i].activation != layer_activation:
+                raise DifferentActivationError
 
         self.layers = layers
-        self.weigths = None
+        self.weigths = []
         self.activation = layer_activation
 
-        self.activationfn = None
         if layer_activation == 'relu':
+            raise NotImplementedError
             self.activationfn = relu
         elif layer_activation == 'linear':
             self.activationfn = linear
         else:
             self.activationfn = sigmoid
 
-    def _init_weigths(self, range_gen):
+    def init_weigths(self, range_gen):
+        self.weigths = []
         for i in range(0, len(self.layers) - 1):
             matrix = np.random.uniform(
                 range_gen[0], 
@@ -63,15 +71,14 @@ class NeuralNetwork:
 
         return self.weigths
 
-    def forward(self, X):
-        result = X
-        for i in range(0, len(self.layers) - 1):
-            result = self.activationfn(result @ self.weigths[i])
-
-        return result
+    def forward(self, x):
+        self.layers[0].value = x
+        for i in range(1, len(self.layers)):
+            self.layers[i].value = self.activationfn(self.layers[i - 1].value @ self.weigths[i - 1])
+        return self.layers[-1].value
 
     def predict(self, X):
-        return self.forward(X)
+        return np.array([self.forward(x) for x in X])
 
     def error(self, X, y):
         if self.activation == 'relu':
@@ -89,9 +96,22 @@ class NeuralNetwork:
             rigth_part = np.sum(np.sum((1 - y) * np.log(1 - prediction), axis=1))
             return -(left_part + rigth_part) / X.shape[0]
 
-    def backprop(self):
-        # going to return a list with all the gradients
-        pass
+    def backprop(self, X, y):
+        if self.activation == 'relu':
+            raise NotImplementedError
+        if self.activation == 'linear':
+            raise NotImplementedError
+
+        if self.activation == 'sigmoid':
+            # m is number of examples
+            # X in R^{m·n}
+            # y in R^{m·o} 
+            prediction = self.predict(X) # in R^{m·o}
+            gradient = np.sum((prediction - y) / prediction * (prediction - 1), axis=0) # in R^o
+            for i in range(len(self.layers) - 1, 0, -1):
+                gradient = gradient 
+
+            return gradient
 
     def update_weigths(self, X, y, alpha):
         gradients = self.backprop()
@@ -99,7 +119,7 @@ class NeuralNetwork:
             self.weigths[i] = weigth - alpha * gradients[i]
 
     def fit(self, X, y, alpha, tolerance, range_gen=(0, 1), print_each=50):
-        initial_weigths =  self._init_weigths(range_gen)
+        initial_weigths =  self.init_weigths(range_gen)
         error = []
         error.append(self.error(X, y))
         self.update_weigths(X, y, alpha)
@@ -115,3 +135,27 @@ class NeuralNetwork:
             epoch += 1 
 
         return initial_weigths
+
+if __name__ == '__main__':
+    model = NeuralNetwork([
+        Layer(3, 'linear'),
+        Layer(2, 'sigmoid'),
+        Layer(2, 'sigmoid'),
+    ])
+
+    model.init_weigths((0, 1))
+    X = np.array([
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9]
+    ])
+
+    y = np.array([
+        [1, 0],
+        [1, 0],
+        [0, 1],
+    ])
+
+    print(model.forward(X))
+    print(model.layers[0].value)
+    #print(model.backprop(X, y))

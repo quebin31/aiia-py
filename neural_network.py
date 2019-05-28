@@ -25,7 +25,7 @@ class InputLayerActivationError(Exception):
 class Layer:
     def __init__(self, no_neurons, activation):
         self.activation = {
-            'relu': relu,
+            #'relu': relu,
             'linear': linear,
             'sigmoid': sigmoid
         }.get(activation, None) 
@@ -44,7 +44,7 @@ class NeuralNetwork:
     def __init__(self, layers):
         # Check that there are at least two layers
         if len(layers) < 2:
-            raise IllformedArchitectureError
+            raise IllformedArchitectureError(f'We need at least two layers')
 
         # Check that the first layer (input layer) has a linear activation
         if layers[0].activation != linear:
@@ -53,7 +53,6 @@ class NeuralNetwork:
         # Initialize member variables
         self.layers = layers
         self.weigths = []
-
 
     # Randomly initialize weigths from the specified range_gen
     def init_weigths(self, range_gen):
@@ -83,6 +82,7 @@ class NeuralNetwork:
     #   self.layers[i].value to be a vector containing h^(i) for this example
     def forward(self, X):
         self.layers[0].value = X
+
         for i in range(1, len(self.layers)):
             self.layers[i].value = self.layers[i - 1].value @ self.weigths[i - 1]
             self.layers[i].activate()
@@ -93,48 +93,58 @@ class NeuralNetwork:
     def predict(self, X):
         return self.forward(X)
 
-    # Calculate error based on the default activation for this neural network
-    # TODO: This can be changed to accept 'mse', 'cross_entropy', etc.
-    def error(self, X, y):
-        if self.activation == 'relu':
-            raise NotImplementedError
-
-        if self.activation == 'linear':
+    # Calculate error based on the error_type (values: 'mse', 'cross_entropy')
+    def error(self, X, y, error_type):
+        if error_type == 'mse':
             prediction = self.predict(X)
             distance = prediction - y
             mse = distance * distance
             return 0.5 * np.sum(np.sum(mse, axis=1)) * X.shape[0]
 
-        if self.activation == 'sigmoid':
+        if error_type == 'cross_entropy':
             prediction = self.predict(X)
             left_part = np.sum(np.sum(y * np.log(prediction), axis=1))
             rigth_part = np.sum(np.sum((1 - y) * np.log(1 - prediction), axis=1))
             return -(left_part + rigth_part) / X.shape[0]
 
-    # Calculate the gradient using the backpropagation algorithm
-    # TODO: This can be changed to depend on the error function type ('mse',
-    # 'cross_entropy', etc) and working with layers with different activation functions
-    def backprop(self, X, y):
-        if self.activation == 'relu':
-            raise NotImplementedError
-        if self.activation == 'linear':
-            raise NotImplementedError
+        raise NotRecognizedActivationError(f'Unknown cost function {error_type}')
 
-        if self.activation == 'sigmoid':
-            # m is number of examples
-            # X in R^{m·n}
-            # y in R^{m·o} 
-            prediction = self.predict(X) # in R^{m·o}
-            gradient = np.sum((prediction - y) / prediction * (prediction - 1), axis=0) # in R^o
-            for i in range(len(self.layers) - 1, 0, -1):
-                gradient = gradient 
+    # Calculate the gradient using the backpropagation algorithm 
+    def backprop(self, X, y, error_type):
+        # m is number of examples
+        # X in R^{m·n}
+        # y in R^{m·o} 
+        prediction = self.predict(X)
 
-            return gradient
+        # Calculate cost gradient wrt output 
+        gradient = {
+            'mse': np.sum(prediction - y, axis=0), # in R^o
+            'cross_entropy': np.sum((prediction - y) / prediction * (prediction - 1), axis=0), # in R^o
+        }[error_type]
+
+        gradients = []
+
+        # Propagate the gradient
+        for i in range(len(self.layers) - 1, 0, -1):
+            # Not expecting any other activation
+            activation_derivative = {
+                #relu: None, 
+                linear: 1,
+                sigmoid: self.layers[i].value * (self.layers[i].value - 1)
+            }[self.layers[i].activation]
+
+            gradient = gradient * np.sum(activation_derivative, axis=0)
+            gradient = gradient @ self.layers[i - 1].value
+            gradient = gradient @ self.weigths[i]
+
+            gradients.append(gradient)
+
+        return gradients
 
     # Update weigths using gradient descent
     # TODO: This can be changed to stochastic gradient descent
-    def update_weigths(self, X, y, alpha):
-        gradients = self.backprop()
+    def update_weigths(self, X, y, alpha, error_type):
+        gradients = self.backprop(X, y, error_type)
         for (i, weigth) in enumerate(self.weigths):
             self.weigths[i] = weigth - alpha * gradients[i]
 
@@ -161,7 +171,7 @@ if __name__ == '__main__':
     model = NeuralNetwork([
         Layer(3, 'linear'),
         Layer(2, 'sigmoid'),
-        Layer(2, 'sigmoid'),
+        Layer(3, 'sigmoid'),
     ])
 
     model.init_weigths((0, 1))
@@ -172,11 +182,17 @@ if __name__ == '__main__':
     ])
 
     y = np.array([
-        [1, 0],
-        [1, 0],
-        [0, 1],
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
     ])
 
+    print('Forward propagation')
     print(model.forward(X))
-    print(model.layers[0].value)
-    #print(model.backprop(X, y))
+
+    print('Model\'s layers')
+    for layer in model.layers:
+        print(layer.value)
+
+    print('Error function')
+    print(model.error(X, y, 'cross_entropy'))

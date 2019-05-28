@@ -28,29 +28,32 @@ class Layer:
         self.value = []
         self.activation = activation
 
-
 # Neural network abstraction
 class NeuralNetwork:
     def __init__(self, layers):
-        if len(layers) == 0:
-            raise IllformedArchitectureError
-
+        # Check that there are at least to layers
         if len(layers) < 2:
             raise IllformedArchitectureError
 
+        # Check that the first layer (input layer) has a linear activation
         if layers[0].activation != 'linear':
             raise InputLayerActivationError
 
+        # For now store the default activation for all layers as the activation found in
+        # layers[1]
         layer_activation = layers[1].activation
 
-        for i in range(1, len(layers)):
+        # Check that layers[i], i = 2,...,len(layers) have the same activation function
+        for i in range(2, len(layers)):
             if layers[i].activation != layer_activation:
                 raise DifferentActivationError
 
+        # Initialize member variables
         self.layers = layers
         self.weigths = []
         self.activation = layer_activation
 
+        # Define an activationfn used in forward propagation
         if layer_activation == 'relu':
             raise NotImplementedError
             self.activationfn = relu
@@ -59,6 +62,8 @@ class NeuralNetwork:
         else:
             self.activationfn = sigmoid
 
+
+    # Randomly initialize weigths from the specified range_gen
     def init_weigths(self, range_gen):
         self.weigths = []
         for i in range(0, len(self.layers) - 1):
@@ -71,15 +76,27 @@ class NeuralNetwork:
 
         return self.weigths
 
-    def forward(self, x):
-        self.layers[0].value = x
+    # Forward could be applied to feature matrix or a single example
+    # Case X is feature matrix:
+    #   It'll calculate forward propagation for every example and will set
+    #   self.layers[i].value to be a matrix containing h^(i) in each row for each 
+    #   example X[i]
+    #
+    # Case X is a single example:
+    #   It'll calculate forward propagation for this example and will set
+    #   self.layers[i].value to be a vector containing h^(i) for this example
+    def forward(self, X):
+        self.layers[0].value = X
         for i in range(1, len(self.layers)):
             self.layers[i].value = self.activationfn(self.layers[i - 1].value @ self.weigths[i - 1])
         return self.layers[-1].value
 
+    # Just the same as self.forward, it's just an interface 
     def predict(self, X):
-        return np.array([self.forward(x) for x in X])
+        return self.forward(X)
 
+    # Calculate error based on the default activation for this neural network
+    # TODO: This can be changed to accept 'mse', 'cross_entropy', etc.
     def error(self, X, y):
         if self.activation == 'relu':
             raise NotImplementedError
@@ -96,6 +113,9 @@ class NeuralNetwork:
             rigth_part = np.sum(np.sum((1 - y) * np.log(1 - prediction), axis=1))
             return -(left_part + rigth_part) / X.shape[0]
 
+    # Calculate the gradient using the backpropagation algorithm
+    # TODO: This can be changed to depend on the error function type ('mse',
+    # 'cross_entropy', etc) and working with layers with different activation functions
     def backprop(self, X, y):
         if self.activation == 'relu':
             raise NotImplementedError
@@ -113,11 +133,14 @@ class NeuralNetwork:
 
             return gradient
 
+    # Update weigths using gradient descent
+    # TODO: This can be changed to stochastic gradient descent
     def update_weigths(self, X, y, alpha):
         gradients = self.backprop()
         for (i, weigth) in enumerate(self.weigths):
             self.weigths[i] = weigth - alpha * gradients[i]
 
+    # Main function, make the neural network 'fit' the example data to the desired data
     def fit(self, X, y, alpha, tolerance, range_gen=(0, 1), print_each=50):
         initial_weigths =  self.init_weigths(range_gen)
         error = []

@@ -116,7 +116,7 @@ class NeuralNetwork:
         # y in R^{m·o} 
         prediction = self.predict(X)
 
-        # Calculate cost gradient wrt output 
+        # Calculate cost gradient w.r.t. output 
         gradient = {
             'mse': np.sum(prediction - y, axis=0), # in R^o
             'cross_entropy': np.sum((prediction - y) / prediction * (prediction - 1), axis=0), # in R^o
@@ -125,19 +125,19 @@ class NeuralNetwork:
         gradients = []
 
         # Propagate the gradient
-        for i in range(len(self.layers) - 1, 0, -1):
+        for l in range(len(self.layers) - 1, 0, -1):
             # Not expecting any other activation
             activation_derivative = {
-                #relu: None, 
+                #relu: TODO, 
                 linear: 1,
-                sigmoid: self.layers[i].value * (self.layers[i].value - 1)
-            }[self.layers[i].activation]
+                sigmoid: self.layers[l].value * (self.layers[l].value - 1)
+            }[self.layers[l].activation]
 
             gradient = gradient * np.sum(activation_derivative, axis=0)
-            gradient = gradient @ self.layers[i - 1].value
-            gradient = gradient @ self.weigths[i]
-
+            gradient = gradient.reshape((-1, 1)) @ np.sum(self.layers[l - 1].value,
+                                                          axis=0).reshape((1, -1))
             gradients.append(gradient)
+            #gradient = gradient @ self.weigths[l - 1]
 
         return gradients
 
@@ -149,18 +149,18 @@ class NeuralNetwork:
             self.weigths[i] = weigth - alpha * gradients[i]
 
     # Main function, make the neural network 'fit' the example data to the desired data
-    def fit(self, X, y, alpha, tolerance, range_gen=(0, 1), print_each=50):
+    def fit(self, X, y, alpha, tolerance, error_type, range_gen=(0, 1), print_each=50):
         initial_weigths =  self.init_weigths(range_gen)
         error = []
-        error.append(self.error(X, y))
-        self.update_weigths(X, y, alpha)
-        error.append(self.error(X, y))
+        error.append(self.error(X, y, error_type))
+        self.update_weigths(X, y, alpha, error_type)
+        error.append(self.error(X, y, error_type))
 
         epoch = 1
         while abs(error[1] - error[0]) >= tolerance:
-            self.update_weigths(X, y, alpha)
+            self.update_weigths(X, y, alpha, error_type)
             error[0] = error[1]
-            error[1] = self.error(X, y)
+            error[1] = self.error(X, y, error_type)
             if not (epoch % print_each):
                 print(f'Current error: {error[1]}')
             epoch += 1 
@@ -196,3 +196,5 @@ if __name__ == '__main__':
 
     print('Error function')
     print(model.error(X, y, 'cross_entropy'))
+
+    model.fit(X, y, 0.001, 0.00001, 'cross_entropy')

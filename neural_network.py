@@ -114,17 +114,17 @@ class NeuralNetwork:
         # m is number of examples
         # X in R^{m·n}
         # y in R^{m·o} 
+        # Prediction implies forward
         prediction = self.predict(X)
 
         # Calculate cost gradient w.r.t. output 
         gradient = {
-            'mse': np.sum(prediction - y, axis=0), # in R^o
-            'cross_entropy': np.sum((prediction - y) / prediction * (prediction - 1), axis=0), # in R^o
+            'mse': prediction - y, # in R^{m·o}
+            'cross_entropy': (prediction - y) / prediction * (prediction - 1)  # in R^o
         }[error_type]
 
         gradients = []
 
-        # Propagate the gradient
         for l in range(len(self.layers) - 1, 0, -1):
             # Not expecting any other activation
             activation_derivative = {
@@ -133,19 +133,25 @@ class NeuralNetwork:
                 sigmoid: self.layers[l].value * (self.layers[l].value - 1)
             }[self.layers[l].activation]
 
-            gradient = gradient * np.sum(activation_derivative, axis=0)
-            gradient = gradient.reshape((-1, 1)) @ np.sum(self.layers[l - 1].value,
-                                                          axis=0).reshape((1, -1))
-            gradients.append(gradient)
-            #gradient = gradient @ self.weigths[l - 1]
+            gradient = gradient * activation_derivative
+            weigth_derivative = gradient.T @ self.layers[l - 1].value
+            # print('Layer {}, gradient shape = {}'.format(l, gradient.shape))
+            # print('Layer {}, weigths shape = {}'.format(l, self.weigths[l - 1].shape))
+            # print('Weigth derivative shape = {}'.format(weigth_derivative.shape))
+            gradients.append(weigth_derivative.T)
+            gradient = gradient @ self.weigths[l - 1].T
 
+        gradients.reverse()
         return gradients
 
     # Update weigths using gradient descent
     # TODO: This can be changed to stochastic gradient descent
+    # TODO: Check if it's right implemented w.r.t. backprop
     def update_weigths(self, X, y, alpha, error_type):
         gradients = self.backprop(X, y, error_type)
         for (i, weigth) in enumerate(self.weigths):
+            gradients[i] = gradients[i] / X.shape[0]
+            # gradients[i] = gradients[i] if error_type == 'mse' else -gradients[i]
             self.weigths[i] = weigth - alpha * gradients[i]
 
     # Main function, make the neural network 'fit' the example data to the desired data
@@ -197,4 +203,5 @@ if __name__ == '__main__':
     print('Error function')
     print(model.error(X, y, 'cross_entropy'))
 
-    model.fit(X, y, 0.001, 0.00001, 'cross_entropy')
+    print(model.backprop(X, y, 'cross_entropy'))
+    model.fit(X, y, 0.001, 0.000001, 'cross_entropy')

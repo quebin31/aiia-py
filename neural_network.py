@@ -134,7 +134,10 @@ class NeuralNetwork:
             }[self.layers[l].activation]
 
             gradient = gradient * activation_derivative
-            weigth_derivative = gradient.T @ self.layers[l - 1].value
+            # print(gradient.shape)
+            # print(self.layers[l - 1].value.shape)
+            weigth_derivative = (gradient.reshape((-1, gradient.shape[0])).T @
+                self.layers[l - 1].value.reshape((-1, self.layers[l - 1].value.shape[0])))
             # print('Layer {}, gradient shape = {}'.format(l, gradient.shape))
             # print('Layer {}, weigths shape = {}'.format(l, self.weigths[l - 1].shape))
             # print('Weigth derivative shape = {}'.format(weigth_derivative.shape))
@@ -150,11 +153,11 @@ class NeuralNetwork:
     def update_weigths(self, X, y, alpha, error_type):
         for x, y in zip(X, y):
             gradients = self.backward_propagation(x, y, error_type)
-            print(gradients)
+            # print(gradients)
 
             for (i, weigth) in enumerate(self.weigths):
                 gradients[i] = gradients[i] / X.shape[0]
-                # gradients[i] = gradients[i] if error_type == 'mse' else -gradients[i]
+                gradients[i] = gradients[i] if error_type == 'mse' else -gradients[i]
                 self.weigths[i] = weigth - alpha * gradients[i]
 
     # Main function, make the neural network 'fit' the example data to the desired data

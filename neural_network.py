@@ -110,7 +110,7 @@ class NeuralNetwork:
         raise NotRecognizedActivationError(f'Unknown cost function {error_type}')
 
     # Calculate the gradient using the backpropagation algorithm 
-    def backprop(self, X, y, error_type):
+    def backward_propagation(self, X, y, error_type):
         # m is number of examples
         # X in R^{m·n}
         # y in R^{m·o} 
@@ -120,7 +120,7 @@ class NeuralNetwork:
         # Calculate cost gradient w.r.t. output 
         gradient = {
             'mse': prediction - y, # in R^{m·o}
-            'cross_entropy': (prediction - y) / prediction * (prediction - 1)  # in R^o
+            'cross_entropy': -(prediction - y) / prediction * (prediction - 1)  # in R^o
         }[error_type]
 
         gradients = []
@@ -148,11 +148,14 @@ class NeuralNetwork:
     # TODO: This can be changed to stochastic gradient descent
     # TODO: Check if it's right implemented w.r.t. backprop
     def update_weigths(self, X, y, alpha, error_type):
-        gradients = self.backprop(X, y, error_type)
-        for (i, weigth) in enumerate(self.weigths):
-            gradients[i] = gradients[i] / X.shape[0]
-            # gradients[i] = gradients[i] if error_type == 'mse' else -gradients[i]
-            self.weigths[i] = weigth - alpha * gradients[i]
+        for x, y in zip(X, y):
+            gradients = self.backward_propagation(x, y, error_type)
+            print(gradients)
+
+            for (i, weigth) in enumerate(self.weigths):
+                gradients[i] = gradients[i] / X.shape[0]
+                # gradients[i] = gradients[i] if error_type == 'mse' else -gradients[i]
+                self.weigths[i] = weigth - alpha * gradients[i]
 
     # Main function, make the neural network 'fit' the example data to the desired data
     def fit(self, X, y, alpha, tolerance, error_type, range_gen=(0, 1), print_each=50):
@@ -203,5 +206,5 @@ if __name__ == '__main__':
     print('Error function')
     print(model.error(X, y, 'cross_entropy'))
 
-    print(model.backprop(X, y, 'cross_entropy'))
+    print(model.backward_propagation(X, y, 'cross_entropy'))
     model.fit(X, y, 0.001, 0.000001, 'cross_entropy')

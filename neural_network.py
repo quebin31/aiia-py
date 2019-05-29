@@ -1,7 +1,7 @@
 import numpy as np
 
 # Activation functions
-relu    = lambda x: np.maximum(np.zeros(x.size), x)
+relu    = lambda x: np.maximum(np.zeros(x.shape), x)
 linear  = lambda x: x
 sigmoid = lambda x: 1 / (1 + np.exp(-x))
 
@@ -21,20 +21,20 @@ class NotRecognizedActivationError(Exception):
 class InputLayerActivationError(Exception):
     pass
 
-# Layer abstraction
+# Layer abstraction class
 class Layer:
-    def __init__(self, no_neurons, activation):
+    def __init__(self, size, activation):
         self.activation = {
-            #'relu': relu,
-            'linear': linear,
-            'sigmoid': sigmoid
+            #'relu'   : relu, 
+            'linear'  : linear,
+            'sigmoid' : sigmoid
         }.get(activation, None) 
 
         if not self.activation:
             raise NotRecognizedActivationError(f'Unknown activation function {activation}')
 
+        self.size  = size
         self.value = []
-        self.size = no_neurons
 
     def activate(self):
         self.value = self.activation(self.value)
@@ -51,7 +51,7 @@ class NeuralNetwork:
             raise InputLayerActivationError(f'First layer needs to have linear activation')
 
         # Initialize member variables
-        self.layers = layers
+        self.layers  = layers
         self.weigths = []
 
     # Randomly initialize weigths from the specified range_gen
@@ -69,7 +69,7 @@ class NeuralNetwork:
 
     # Forward could be applied to feature matrix or a single example
     # Case X is feature matrix:
-    #   It'll calculate forward propagation for every example and will set
+    #   It'll calculate forward_propagation propagation for every example and will set
     #   self.layers[i].value to be a matrix containing h^(j) in each row for each 
     #   example X[j], e.g.
     #   
@@ -78,9 +78,9 @@ class NeuralNetwork:
     #           where j is the number of examples
     #
     # Case X is a single example:
-    #   It'll calculate forward propagation for this example and will set
+    #   It'll calculate forward_propagation propagation for this example and will set
     #   self.layers[i].value to be a vector containing h^(i) for this example
-    def forward(self, X):
+    def forward_propagation(self, X):
         self.layers[0].value = X
 
         for i in range(1, len(self.layers)):
@@ -91,7 +91,7 @@ class NeuralNetwork:
 
     # Just the same as self.forward
     def predict(self, X):
-        return self.forward(X)
+        return self.forward_propagation(X)
 
     # Calculate error based on the error_type (values: 'mse', 'cross_entropy')
     def error(self, X, y, error_type):
@@ -194,7 +194,7 @@ if __name__ == '__main__':
     ])
 
     print('Forward propagation')
-    print(model.forward(X))
+    print(model.forward_propagation(X))
 
     print('Model\'s layers')
     for layer in model.layers:

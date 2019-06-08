@@ -46,6 +46,6 @@ if __name__  == '__main__':
     centroids = model.fit(X)
     print(centroids)
     
-    plt.scatter(X[:, 0], X[:, 1], s=150)
-    plt.scatter(centroids[:, 0], centroids[:, 1], color='k', marker='*', s=150)
+    plt.scatter(X[:, 0], X[:, 1], s=100)
+    plt.scatter(centroids[:, 0], centroids[:, 1], color='k', marker='*', s=100)
     plt.show()

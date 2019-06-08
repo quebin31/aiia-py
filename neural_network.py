@@ -1,9 +1,15 @@
 import numpy as np
 
 # Activation functions
-relu    = lambda x: np.maximum(np.zeros(x.shape), x)
 linear  = lambda x: x
 sigmoid = lambda x: 1 / (1 + np.exp(-x))
+
+DEBUG = True
+
+def debug(x):
+    if DEBUG:
+        print(x)
+        input("Press enter")
 
 # Exceptions 
 class IllformedArchitectureError(Exception):
@@ -24,8 +30,8 @@ class InputLayerActivationError(Exception):
 # Layer abstraction class
 class Layer:
     def __init__(self, size, activation):
+        # Check activation
         self.activation = {
-            #'relu'   : relu, 
             'linear'  : linear,
             'sigmoid' : sigmoid
         }.get(activation, None) 
@@ -33,11 +39,21 @@ class Layer:
         if not self.activation:
             raise NotRecognizedActivationError(f'Unknown activation function {activation}')
 
-        self.size  = size
-        self.value = []
+        self.units   = []
+        self.weigths = []
+        self.size    = size
 
     def activate(self):
-        self.value = self.activation(self.value)
+        # Activate units, except bias unit
+        self.units[1:] = self.activation(self.units[1:])
+
+    def activation_derivative(self):
+        derivative = {
+            linear: 1.,
+            sigmoid: self.units[1:] * (1 - self.units[1:])
+        }[self.activation]
+
+        return derivative
 
 # Neural network abstraction
 class NeuralNetwork:
@@ -52,115 +68,106 @@ class NeuralNetwork:
 
         # Initialize member variables
         self.layers  = layers
-        self.weigths = []
 
     # Randomly initialize weigths from the specified range_gen
     def init_weigths(self, range_gen):
-        self.weigths = []
-        for i in range(0, len(self.layers) - 1):
-            matrix = np.random.uniform(
-                range_gen[0], 
+        for i in range(1, len(self.layers)):
+            self.layers[i].weigths = np.random.uniform(
+                range_gen[0],
                 range_gen[1],
-                (self.layers[i].size, self.layers[i + 1].size))
+                (self.layers[i].size, self.layers[i - 1].size + 1))
 
-            self.weigths.append(matrix)
-
-        return self.weigths
-
-    # Forward could be applied to feature matrix or a single example
-    # Case X is feature matrix:
-    #   It'll calculate forward_propagation propagation for every example and will set
-    #   self.layers[i].value to be a matrix containing h^(j) in each row for each 
-    #   example X[j], e.g.
-    #   
-    #       self.layers[i].value = [h^(i)_0, ..., h^(i)_j]
-    #           where h^(i) in R^{self.layers[i].size}
-    #           where j is the number of examples
-    #
-    # Case X is a single example:
-    #   It'll calculate forward_propagation propagation for this example and will set
-    #   self.layers[i].value to be a vector containing h^(i) for this example
-    def forward_propagation(self, X):
-        self.layers[0].value = X
+    # Apply forward propagation for an example
+    def forward_propagation(self, x):
+        self.layers[0].units = np.concatenate(([1.], x))
 
         for i in range(1, len(self.layers)):
-            self.layers[i].value = self.layers[i - 1].value @ self.weigths[i - 1]
+            self.layers[i].units = np.concatenate(
+                ([1.], self.layers[i].weigths @ self.layers[i - 1].units))
             self.layers[i].activate()
 
-        return self.layers[-1].value
+        # Last layer doesn't need a bias
+        return self.layers[-1].units[1:]
 
-    # Just the same as self.forward
+    # Apply forward propagation for many examples
     def predict(self, X):
-        return self.forward_propagation(X)
+        predictions = []
+        for x in X:
+            predictions.append(self.forward_propagation(x))
+
+        return np.array(predictions)
 
     # Calculate error based on the error_type (values: 'mse', 'cross_entropy')
-    def error(self, X, y, error_type):
+    def error(self, X, Y, error_type):
         if error_type == 'mse':
-            prediction = self.predict(X)
-            distance = prediction - y
-            mse = distance * distance
-            return 0.5 * np.sum(np.sum(mse, axis=1)) * X.shape[0]
+            predictions = self.predict(X)
+            mean_sqerr  = np.sum((predictions - Y) ** 2)
+            return mean_sqerr / (2 * X.shape[0])
 
         if error_type == 'cross_entropy':
-            prediction = self.predict(X)
-            left_part = np.sum(np.sum(y * np.log(prediction), axis=1))
-            rigth_part = np.sum(np.sum((1 - y) * np.log(1 - prediction), axis=1))
-            return -(left_part + rigth_part) / X.shape[0]
+            predictions = self.predict(X)
+            left_part   = Y * np.log(predictions)
+            rigth_part  = (1 - Y) * np.log(1 - predictions)
+            cross_error = np.sum(left_part + rigth_part)
+            return -(cross_error / X.shape[0])
 
         raise NotRecognizedActivationError(f'Unknown cost function {error_type}')
 
-    # Calculate the gradient using the backpropagation algorithm 
-    def backprop(self, X, y, error_type):
-        # m is number of examples
-        # X in R^{m·n}
-        # y in R^{m·o} 
-        # Prediction implies forward
-        prediction = self.predict(X)
+    # Calculate gradients w.r.t. to only one example
+    def backprop(self, x, y, error_type):
+        # Update layer's units 
+        prediction = self.forward_propagation(x)
 
-        # Calculate cost gradient w.r.t. output 
+        # print(prediction, y)
+        # Calculate gradient of error w.r.t. last layer units (output)
         gradient = {
-            'mse': prediction - y, # in R^{m·o}
-            'cross_entropy': (prediction - y) / prediction * (prediction - 1)  # in R^o
+            'mse': prediction - y,
+            'cross_entropy': (prediction - y) / prediction * (1 - prediction)  
         }[error_type]
-
-        gradients = []
+        
+        # Store weigths derivatives
+        backprop = []
 
         for l in range(len(self.layers) - 1, 0, -1):
-            # Not expecting any other activation
-            activation_derivative = {
-                #relu: TODO, 
-                linear: 1,
-                sigmoid: self.layers[l].value * (self.layers[l].value - 1)
-            }[self.layers[l].activation]
-
+            activation_derivative = self.layers[l].activation_derivative()
             gradient = gradient * activation_derivative
-            weigth_derivative = gradient.T @ self.layers[l - 1].value
-            # print('Layer {}, gradient shape = {}'.format(l, gradient.shape))
-            # print('Layer {}, weigths shape = {}'.format(l, self.weigths[l - 1].shape))
-            # print('Weigth derivative shape = {}'.format(weigth_derivative.shape))
-            gradients.append(weigth_derivative.T)
-            gradient = gradient @ self.weigths[l - 1].T
+            dweigths = gradient.reshape((-1, 1)) @ self.layers[l - 1].units.reshape((1, -1))
+            backprop.append(dweigths)
 
-        gradients.reverse()
-        return gradients
+            gradient = self.layers[l].weigths[:, 1:].T @ gradient
+
+        return np.array(list(reversed(backprop)))
 
     # Update weigths using gradient descent
-    # TODO: This can be changed to stochastic gradient descent
-    # TODO: Check if it's right implemented w.r.t. backprop
-    def update_weigths(self, X, y, alpha, error_type):
-        gradients = self.backprop(X, y, error_type)
-        for (i, weigth) in enumerate(self.weigths):
-            gradients[i] = gradients[i] / X.shape[0]
-            # gradients[i] = gradients[i] if error_type == 'mse' else -gradients[i]
-            self.weigths[i] = weigth - alpha * gradients[i]
+    def update_weigths(self, X, Y, alpha, error_type):
+        temp_layers = self.layers
+
+        # Take each example and it's desired output
+        gradients = []
+        for i in range(1, len(self.layers)):
+            gradients.append(np.zeros(self.layers[i].weigths.shape))
+
+        gradients = np.array(gradients)
+
+        for x, y in zip(X, Y):
+            gradients += self.backprop(x, y, error_type)
+            # gradients /= X.shape[0]
+            # debug(gradients)
+
+        for i in range(1, len(self.layers)):
+            temp_layers[i].weigths = temp_layers[i].weigths - alpha * gradients[i - 1] 
+
+        self.layers = temp_layers
 
     # Main function, make the neural network 'fit' the example data to the desired data
-    def fit(self, X, y, alpha, tolerance, error_type, range_gen=(0, 1), print_each=50):
-        initial_weigths =  self.init_weigths(range_gen)
+    def fit(self, X, y, alpha, tolerance, error_type, range_gen=(0, 1), print_each=50,
+            max_epoch=None):
+        self.init_weigths(range_gen)
         error = []
         error.append(self.error(X, y, error_type))
         self.update_weigths(X, y, alpha, error_type)
         error.append(self.error(X, y, error_type))
+        debug(error)
 
         epoch = 1
         while abs(error[1] - error[0]) >= tolerance:
@@ -168,40 +175,9 @@ class NeuralNetwork:
             error[0] = error[1]
             error[1] = self.error(X, y, error_type)
             if not (epoch % print_each):
-                print(f'Current error: {error[1]}')
+                print(f'Epoch {epoch}, current error: {error[1]}')
+
+            if epoch == max_epoch:
+                break
+
             epoch += 1 
-
-        return initial_weigths
-
-if __name__ == '__main__':
-    model = NeuralNetwork([
-        Layer(3, 'linear'),
-        Layer(2, 'sigmoid'),
-        Layer(3, 'sigmoid'),
-    ])
-
-    model.init_weigths((0, 1))
-    X = np.array([
-        [1, 2, 3],
-        [4, 5, 6],
-        [7, 8, 9]
-    ])
-
-    y = np.array([
-        [1, 0, 0],
-        [0, 1, 0],
-        [0, 0, 1],
-    ])
-
-    print('Forward propagation')
-    print(model.forward_propagation(X))
-
-    print('Model\'s layers')
-    for layer in model.layers:
-        print(layer.value)
-
-    print('Error function')
-    print(model.error(X, y, 'cross_entropy'))
-
-    print(model.backprop(X, y, 'cross_entropy'))
-    model.fit(X, y, 0.001, 0.000001, 'cross_entropy')

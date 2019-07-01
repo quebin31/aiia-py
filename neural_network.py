@@ -44,7 +44,7 @@ class Layer:
         self.size    = size
 
     def activate(self):
-        # Activate units, except bias unit
+        # Activate current units and add a bias unit
         self.units[1:] = self.activation(self.units[1:])
 
     def activation_derivative(self):
